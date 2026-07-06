@@ -1,0 +1,22 @@
+[
+  {
+    "question": "Where is the Eiffel Tower located?",
+    "expected_keywords": ["Paris", "France"],
+    "reference_numbers": []
+  },
+  {
+    "question": "What is the boiling point of water at sea level in Celsius?",
+    "expected_keywords": ["water", "Celsius"],
+    "reference_numbers": [100]
+  },
+  {
+    "question": "What process do green plants use to convert sunlight into energy?",
+    "expected_keywords": ["photosynthesis", "sunlight"],
+    "reference_numbers": []
+  },
+  {
+    "question": "How many planets are in the Solar System?",
+    "expected_keywords": ["Solar System", "planets"],
+    "reference_numbers": [8]
+  }
+]
