@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     # Vector store: memory | pgvector
     vector_store: str = "memory"
     db_dsn: str = "postgresql://postgres:postgres@db:5432/assistant"
+    # asyncpg connection pool bounds (used when vector_store=pgvector).
+    db_pool_min: int = 1
+    db_pool_max: int = 10
 
     # Observability: none | memory | langfuse
     tracer: str = "none"
