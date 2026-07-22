@@ -1,0 +1,114 @@
+[
+  {
+    "question": "Where is the Eiffel Tower located?",
+    "answer": "The Eiffel Tower is located in the city of Paris in the country of France.",
+    "label": "good",
+    "contexts": ["The Eiffel Tower is located in Paris, the capital city of the country France."],
+    "reference_numbers": [],
+    "expected_keywords": ["Eiffel", "Paris", "France"]
+  },
+  {
+    "question": "What is the boiling point of water at sea level?",
+    "answer": "At sea level water boils at a temperature of 100 degrees Celsius.",
+    "label": "good",
+    "contexts": ["At sea level, water boils at 100 degrees Celsius under standard atmospheric pressure."],
+    "reference_numbers": [100],
+    "expected_keywords": ["water", "boils", "Celsius"]
+  },
+  {
+    "question": "What process do green plants use to convert sunlight?",
+    "answer": "Green plants use photosynthesis to convert sunlight into chemical energy.",
+    "label": "good",
+    "contexts": ["Green plants use photosynthesis to convert sunlight into stored chemical energy."],
+    "reference_numbers": [],
+    "expected_keywords": ["plants", "photosynthesis", "sunlight"]
+  },
+  {
+    "question": "How many planets are in the Solar System?",
+    "answer": "The Solar System contains 8 planets orbiting the central star.",
+    "label": "good",
+    "contexts": ["The Solar System contains 8 planets orbiting the central star, the Sun."],
+    "reference_numbers": [8],
+    "expected_keywords": ["planets", "Solar"]
+  },
+  {
+    "question": "What is the chemical symbol for gold?",
+    "answer": "The chemical symbol for gold is Au and its atomic number is 79.",
+    "label": "good",
+    "contexts": ["Gold has the chemical symbol Au and an atomic number of 79 on the periodic table."],
+    "reference_numbers": [79],
+    "expected_keywords": ["gold", "symbol", "atomic"]
+  },
+  {
+    "question": "What is the freezing point of water?",
+    "answer": "Water freezes at a temperature of 0 degrees Celsius at sea level.",
+    "label": "good",
+    "contexts": ["Water freezes at 0 degrees Celsius at standard atmospheric pressure."],
+    "reference_numbers": [0],
+    "expected_keywords": ["water", "freezes", "Celsius"]
+  },
+  {
+    "question": "What is the boiling point of water at sea level?",
+    "answer": "At sea level water boils at a temperature of 250 degrees Celsius.",
+    "label": "bad",
+    "contexts": ["At sea level, water boils at 100 degrees Celsius under standard atmospheric pressure."],
+    "reference_numbers": [100],
+    "expected_keywords": ["water", "boils", "Celsius"]
+  },
+  {
+    "question": "How many planets are in the Solar System?",
+    "answer": "The Solar System contains 42 planets orbiting the central star.",
+    "label": "bad",
+    "contexts": ["The Solar System contains 8 planets orbiting the central star, the Sun."],
+    "reference_numbers": [8],
+    "expected_keywords": ["planets", "Solar"]
+  },
+  {
+    "question": "What is the chemical symbol for gold?",
+    "answer": "The chemical symbol for gold is Au and its atomic number is 12.",
+    "label": "bad",
+    "contexts": ["Gold has the chemical symbol Au and an atomic number of 79 on the periodic table."],
+    "reference_numbers": [79],
+    "expected_keywords": ["gold", "symbol", "atomic"]
+  },
+  {
+    "question": "What is the freezing point of water?",
+    "answer": "Water freezes at a temperature of 55 degrees Celsius at sea level.",
+    "label": "bad",
+    "contexts": ["Water freezes at 0 degrees Celsius at standard atmospheric pressure."],
+    "reference_numbers": [0],
+    "expected_keywords": ["water", "freezes", "Celsius"]
+  },
+  {
+    "question": "Where is the Eiffel Tower located?",
+    "answer": "Distributed blockchain ledgers accelerate quantum microprocessor throughput significantly.",
+    "label": "bad",
+    "contexts": ["The Eiffel Tower is located in Paris, the capital city of the country France."],
+    "reference_numbers": [],
+    "expected_keywords": ["Eiffel", "Paris", "France"]
+  },
+  {
+    "question": "What process do green plants use to convert sunlight?",
+    "answer": "Encrypted database indexes optimize concurrent transaction scheduling latency.",
+    "label": "bad",
+    "contexts": ["Green plants use photosynthesis to convert sunlight into stored chemical energy."],
+    "reference_numbers": [],
+    "expected_keywords": ["plants", "photosynthesis", "sunlight"]
+  },
+  {
+    "question": "What is the largest planet in the Solar System?",
+    "answer": "Compiler optimization pipelines reorder instruction scheduling aggressively.",
+    "label": "bad",
+    "contexts": ["The largest planet in the Solar System is Jupiter, a gas giant."],
+    "reference_numbers": [],
+    "expected_keywords": ["largest", "planet", "Jupiter"]
+  },
+  {
+    "question": "What is the capital city of Japan?",
+    "answer": "Reinforcement agents maximize cumulative reward across stochastic environments.",
+    "label": "bad",
+    "contexts": ["The capital city of Japan is Tokyo, a large metropolis."],
+    "reference_numbers": [],
+    "expected_keywords": ["capital", "Japan", "Tokyo"]
+  }
+]
