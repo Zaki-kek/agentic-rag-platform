@@ -5,6 +5,7 @@ Importing this package exposes the tracer abstraction and factory. The default
 code unconditionally without pulling in any observability dependency.
 """
 
+from app.observability.metrics import REGISTRY, Counter, Registry, http_requests_total
 from app.observability.tracer import (
     InMemoryTracer,
     LangfuseTracer,
@@ -23,4 +24,8 @@ __all__ = [
     "InMemoryTracer",
     "LangfuseTracer",
     "build_tracer",
+    "Counter",
+    "Registry",
+    "REGISTRY",
+    "http_requests_total",
 ]
