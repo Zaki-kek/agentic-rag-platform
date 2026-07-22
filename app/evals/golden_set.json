@@ -1,22 +1,104 @@
 [
   {
-    "question": "Where is the Eiffel Tower located?",
-    "expected_keywords": ["Paris", "France"],
-    "reference_numbers": []
+    "question": "Where is the Eiffel Tower located, in which city and country?",
+    "expected_keywords": ["Eiffel", "city", "country"],
+    "reference_numbers": [],
+    "relevant_doc_ids": ["doc_eiffel", "doc_paris"]
   },
   {
-    "question": "What is the boiling point of water at sea level in Celsius?",
-    "expected_keywords": ["water", "Celsius"],
-    "reference_numbers": [100]
+    "question": "What is the boiling point of water at sea level, expressed in Celsius as 100 degrees?",
+    "expected_keywords": ["boiling", "water", "Celsius"],
+    "reference_numbers": [100],
+    "relevant_doc_ids": ["doc_water_phase"]
   },
   {
-    "question": "What process do green plants use to convert sunlight into energy?",
-    "expected_keywords": ["photosynthesis", "sunlight"],
-    "reference_numbers": []
+    "question": "What process do green plants use to convert sunlight into energy, known as photosynthesis?",
+    "expected_keywords": ["plants", "sunlight", "photosynthesis"],
+    "reference_numbers": [],
+    "relevant_doc_ids": ["doc_photosynthesis"]
   },
   {
-    "question": "How many planets are in the Solar System?",
-    "expected_keywords": ["Solar System", "planets"],
-    "reference_numbers": [8]
+    "question": "How many planets are in the Solar System, given the accepted count of 8?",
+    "expected_keywords": ["planets", "Solar", "System"],
+    "reference_numbers": [8],
+    "relevant_doc_ids": ["doc_solar_system"]
+  },
+  {
+    "question": "Who wrote the play Romeo and Juliet, the playwright William Shakespeare?",
+    "expected_keywords": ["Romeo", "Juliet", "Shakespeare"],
+    "reference_numbers": [],
+    "relevant_doc_ids": ["doc_shakespeare"]
+  },
+  {
+    "question": "What is the speed of light in a vacuum, approximately 299792458 metres per second?",
+    "expected_keywords": ["speed", "light", "vacuum"],
+    "reference_numbers": [299792458],
+    "relevant_doc_ids": ["doc_physics_constants"]
+  },
+  {
+    "question": "Which gas do humans exhale that plants absorb, namely carbon dioxide?",
+    "expected_keywords": ["humans", "plants", "carbon"],
+    "reference_numbers": [],
+    "relevant_doc_ids": ["doc_carbon_cycle"]
+  },
+  {
+    "question": "What is the chemical symbol for gold, the element Au with atomic number 79?",
+    "expected_keywords": ["chemical", "gold", "atomic"],
+    "reference_numbers": [79],
+    "relevant_doc_ids": ["doc_periodic_table"]
+  },
+  {
+    "question": "In what year did the Second World War end, the year being 1945?",
+    "expected_keywords": ["Second", "World", "War"],
+    "reference_numbers": [1945],
+    "relevant_doc_ids": ["doc_wwii"]
+  },
+  {
+    "question": "What is the largest planet in the Solar System, the gas giant Jupiter?",
+    "expected_keywords": ["largest", "planet", "Jupiter"],
+    "reference_numbers": [],
+    "relevant_doc_ids": ["doc_solar_system", "doc_jupiter"]
+  },
+  {
+    "question": "How many continents are there on Earth, counted as 7?",
+    "expected_keywords": ["continents", "Earth"],
+    "reference_numbers": [7],
+    "relevant_doc_ids": ["doc_geography"]
+  },
+  {
+    "question": "What is the capital city of Japan, the metropolis Tokyo?",
+    "expected_keywords": ["capital", "Japan", "Tokyo"],
+    "reference_numbers": [],
+    "relevant_doc_ids": ["doc_japan"]
+  },
+  {
+    "question": "Which language is primarily spoken in Brazil, that language being Portuguese?",
+    "expected_keywords": ["language", "Brazil", "Portuguese"],
+    "reference_numbers": [],
+    "relevant_doc_ids": ["doc_brazil"]
+  },
+  {
+    "question": "What is the freezing point of water in Celsius, which is 0 degrees?",
+    "expected_keywords": ["freezing", "water", "Celsius"],
+    "reference_numbers": [0],
+    "relevant_doc_ids": ["doc_water_phase"]
+  },
+  {
+    "question": "Who developed the theory of general relativity, the physicist Albert Einstein?",
+    "expected_keywords": ["theory", "relativity", "Einstein"],
+    "reference_numbers": [],
+    "relevant_doc_ids": ["doc_relativity", "doc_einstein"]
+  },
+  {
+    "question": "What is the powerhouse of the cell in biology, the organelle known as the mitochondria?",
+    "expected_keywords": ["cell", "biology", "mitochondria"],
+    "reference_numbers": [],
+    "relevant_doc_ids": ["doc_cell_biology"]
+  },
+  {
+    "question": "How many sides does a hexagon have, the count being 6?",
+    "expected_keywords": ["sides", "hexagon"],
+    "reference_numbers": [6],
+    "relevant_doc_ids": ["doc_geometry"]
   }
 ]

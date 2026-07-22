@@ -12,11 +12,15 @@ class GoldenCase(BaseModel):
         question: The question posed to the answering function.
         expected_keywords: Keywords a correct answer is expected to contain.
         reference_numbers: Numbers a faithful answer must preserve verbatim.
+        relevant_doc_ids: IDs of documents a retriever should surface for this
+            question, used by retrieval metrics (hit@k, MRR). Optional and
+            backwards-compatible: cases without labels default to an empty list.
     """
 
     question: str
     expected_keywords: list[str]
     reference_numbers: list[float] = Field(default_factory=list)
+    relevant_doc_ids: list[str] = Field(default_factory=list)
 
 
 class CaseResult(BaseModel):
