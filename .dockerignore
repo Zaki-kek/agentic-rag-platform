@@ -1,0 +1,18 @@
+# Version control
+.git
+
+# Tests and docs (not needed in the image)
+tests/
+docs/
+
+# Python caches
+__pycache__
+.*cache
+
+# Secrets and local environment
+.env
+.venv
+
+# Markdown, except the README
+*.md
+!README.md

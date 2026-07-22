@@ -1,0 +1,54 @@
+# Production override for docker-compose.yml.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
+#
+# It layers production-safe defaults on top of the base file:
+#   - no dev conveniences: Postgres is not published to the host, only reachable
+#     on the internal Compose network;
+#   - every provider / DB setting is env-driven (from the shell or an .env file),
+#     with no hardcoded dev fallbacks that could mask a missing secret;
+#   - restart policy and bounded log rotation for a long-running host.
+#
+# Secrets come from the environment / .env at runtime and are never baked into
+# the image. Do not commit a populated .env.
+
+services:
+  db:
+    restart: unless-stopped
+    # Remove the host port publish from the base file: the DB is internal-only.
+    ports: []
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB}
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  api:
+    restart: unless-stopped
+    environment:
+      VECTOR_STORE: ${VECTOR_STORE:-pgvector}
+      DB_DSN: ${DB_DSN:?set DB_DSN}
+      LLM_PROVIDER: ${LLM_PROVIDER:?set LLM_PROVIDER}
+      EMBEDDER: ${EMBEDDER:?set EMBEDDER}
+      LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GIGACHAT_CREDENTIALS: ${GIGACHAT_CREDENTIALS:-}
+      LLM_MAX_CONCURRENCY: ${LLM_MAX_CONCURRENCY:-8}
+      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-60}
+      TOP_K: ${TOP_K:-4}
+      CHUNK_SIZE: ${CHUNK_SIZE:-800}
+      CHUNK_OVERLAP: ${CHUNK_OVERLAP:-120}
+      AGENT_MAX_TOKENS: ${AGENT_MAX_TOKENS:-0}
+      TRACER: ${TRACER:-none}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    name: test (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Flagship requires-python >= 3.11 (3.10 is not supported).
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install
+        run: pip install -e ".[dev,llm]"
+
+      - name: Lint (ruff)
+        run: ruff check .
+
+      # ignore_missing_imports = true stays in pyproject: without it the
+      # LLM SDK stubs (openai / anthropic) make mypy go red.
+      - name: Typecheck (mypy)
+        run: mypy app
+
+      - name: Test + coverage
+        run: pytest --cov=app --cov-report=term-missing --cov-fail-under=85
+
+  docker:
+    name: docker build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t agentic-rag .
