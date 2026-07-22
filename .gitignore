@@ -17,3 +17,4 @@ htmlcov/
 # Build artifacts
 dist/
 build/
+.ingest_checkpoints/
