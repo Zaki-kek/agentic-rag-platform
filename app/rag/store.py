@@ -9,6 +9,7 @@ import numpy as np
 
 if TYPE_CHECKING:
     from app.config import Settings
+    from app.rag.metadata import DocumentMeta
 
 
 @dataclass(frozen=True)
@@ -26,7 +27,13 @@ class VectorStore(Protocol):
 
     async def init(self) -> None: ...
 
-    async def add(self, document: str, chunks: list[str], embeddings: list[list[float]]) -> None: ...
+    async def add(
+        self,
+        document: str,
+        chunks: list[str],
+        embeddings: list[list[float]],
+        meta: DocumentMeta | None = None,
+    ) -> None: ...
 
     async def search(self, embedding: list[float], k: int) -> list[Hit]: ...
 
@@ -41,11 +48,20 @@ class InMemoryVectorStore:
         self._chunk_ids: list[int] = []
         self._texts: list[str] = []
         self._vectors: list[np.ndarray] = []
+        self._meta: dict[str, DocumentMeta] = {}
 
     async def init(self) -> None:
         return None
 
-    async def add(self, document: str, chunks: list[str], embeddings: list[list[float]]) -> None:
+    async def add(
+        self,
+        document: str,
+        chunks: list[str],
+        embeddings: list[list[float]],
+        meta: DocumentMeta | None = None,
+    ) -> None:
+        if meta is not None:
+            self._meta[document] = meta
         for i, (text, emb) in enumerate(zip(chunks, embeddings, strict=True)):
             self._docs.append(document)
             self._chunk_ids.append(i)
@@ -68,15 +84,19 @@ class InMemoryVectorStore:
 class PgVectorStore:
     """PostgreSQL + pgvector store using cosine distance (`<=>`)."""
 
-    def __init__(self, dsn: str, dim: int) -> None:
+    def __init__(self, dsn: str, dim: int, pool_min: int = 1, pool_max: int = 10) -> None:
+        if pool_min > pool_max:
+            raise ValueError(f"pool_min ({pool_min}) must not exceed pool_max ({pool_max})")
         self._dsn = dsn
         self._dim = dim
+        self._pool_min = pool_min
+        self._pool_max = pool_max
         self._pool: Any = None  # asyncpg.Pool, set in init()
 
     async def init(self) -> None:
         import asyncpg  # lazy-imported
 
-        self._pool = await asyncpg.create_pool(self._dsn)
+        self._pool = await asyncpg.create_pool(self._dsn, min_size=self._pool_min, max_size=self._pool_max)
         async with self._pool.acquire() as conn:
             await conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
             await conn.execute(
@@ -99,7 +119,13 @@ class PgVectorStore:
                 "ON chunks USING hnsw (embedding vector_cosine_ops)"
             )
 
-    async def add(self, document: str, chunks: list[str], embeddings: list[list[float]]) -> None:
+    async def add(
+        self,
+        document: str,
+        chunks: list[str],
+        embeddings: list[list[float]],
+        meta: DocumentMeta | None = None,
+    ) -> None:
         rows = [
             (document, i, text, _to_pgvector(emb)) for i, (text, emb) in enumerate(zip(chunks, embeddings, strict=True))
         ]
@@ -108,6 +134,38 @@ class PgVectorStore:
                 "INSERT INTO chunks (document, chunk_id, content, embedding) VALUES ($1, $2, $3, $4::vector)",
                 rows,
             )
+            if meta is not None:  # pragma: no cover - requires live pgvector, offline-unreachable
+                await self._record_meta(conn, meta)
+
+    async def _record_meta(self, conn: Any, meta: DocumentMeta) -> None:  # pragma: no cover - live DB only
+        """Persist optional per-document provenance in a nullable side table.
+
+        The core ``chunks`` insert is untouched; document metadata lives in a
+        separate ``documents`` table created on demand so older schemas keep
+        working. Reached only against a live pgvector database.
+        """
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS documents (
+                source TEXT PRIMARY KEY,
+                content_hash TEXT,
+                ingested_at TEXT,
+                size_bytes BIGINT,
+                chunk_count INT
+            )
+            """
+        )
+        await conn.execute(
+            "INSERT INTO documents (source, content_hash, ingested_at, size_bytes, chunk_count) "
+            "VALUES ($1, $2, $3, $4, $5) ON CONFLICT (source) DO UPDATE SET "
+            "content_hash = EXCLUDED.content_hash, ingested_at = EXCLUDED.ingested_at, "
+            "size_bytes = EXCLUDED.size_bytes, chunk_count = EXCLUDED.chunk_count",
+            meta.source,
+            meta.content_hash,
+            meta.ingested_at,
+            meta.size_bytes,
+            meta.chunk_count,
+        )
 
     async def search(self, embedding: list[float], k: int) -> list[Hit]:
         async with self._pool.acquire() as conn:
@@ -138,5 +196,10 @@ def build_store(settings: Settings, dim: int) -> VectorStore:
     if settings.vector_store == "memory":
         return InMemoryVectorStore()
     if settings.vector_store == "pgvector":
-        return PgVectorStore(dsn=settings.db_dsn, dim=dim)
+        return PgVectorStore(
+            dsn=settings.db_dsn,
+            dim=dim,
+            pool_min=settings.db_pool_min,
+            pool_max=settings.db_pool_max,
+        )
     raise ValueError(f"Unknown vector_store '{settings.vector_store}' (use: memory, pgvector)")
