@@ -68,3 +68,23 @@ class FileCheckpointStore:
             os.replace(path, corrupt)
             logger.warning("Corrupt checkpoint for %s moved to %s", job_id, corrupt.name)
             return None
+
+
+def build_checkpoint_store(kind: str, directory: str | Path = ".checkpoints") -> CheckpointStore:
+    """Build a checkpoint store by kind.
+
+    Args:
+        kind: ``memory`` (process-local) or ``file`` (persisted JSON).
+        directory: Base directory used when ``kind == "file"``.
+
+    Returns:
+        A concrete :class:`CheckpointStore` implementation.
+
+    Raises:
+        ValueError: When ``kind`` is not a known store type.
+    """
+    if kind == "memory":
+        return InMemoryCheckpointStore()
+    if kind == "file":
+        return FileCheckpointStore(directory)
+    raise ValueError(f"unknown checkpoint store: {kind!r} (expected 'memory' or 'file')")

@@ -7,7 +7,22 @@ import asyncio
 import pytest
 
 from app.llm.base import Message
-from app.llm.ratelimit import RateLimitedProvider
+from app.llm.ratelimit import LLMTimeoutError, RateLimitedProvider
+
+
+class SlowProvider:
+    """Sleeps longer than the caller's timeout budget before replying."""
+
+    name = "slow"
+
+    def __init__(self, delay: float) -> None:
+        self.delay = delay
+        self.calls = 0
+
+    async def generate(self, messages: list[Message]) -> str:
+        self.calls += 1
+        await asyncio.sleep(self.delay)
+        return "too late"
 
 
 class FlakyProvider:
@@ -133,6 +148,53 @@ async def test_concurrency_one_serializes() -> None:
 async def test_invalid_arguments_rejected(kwargs: dict[str, float], match: str) -> None:
     with pytest.raises(ValueError, match=match):
         RateLimitedProvider(FlakyProvider(fail_times=0), **kwargs)
+
+
+async def test_slow_call_times_out() -> None:
+    inner = SlowProvider(delay=1.0)
+    # No retries so we only wait one short budget, not several.
+    wrapped = RateLimitedProvider(
+        inner, max_retries=0, backoff_base=0.0, timeout_seconds=0.02
+    )
+
+    with pytest.raises(LLMTimeoutError, match="timed out after"):
+        await wrapped.generate([{"role": "user", "content": "hi"}])
+
+    assert inner.calls == 1
+
+
+async def test_timeout_error_is_a_timeouterror() -> None:
+    inner = SlowProvider(delay=1.0)
+    wrapped = RateLimitedProvider(
+        inner, max_retries=0, backoff_base=0.0, timeout_seconds=0.02
+    )
+
+    # LLMTimeoutError subclasses builtin TimeoutError, so generic callers catch it.
+    with pytest.raises(TimeoutError):
+        await wrapped.generate([{"role": "user", "content": "hi"}])
+
+
+async def test_fast_call_within_timeout_succeeds() -> None:
+    inner = FlakyProvider(fail_times=0, reply="on time")
+    wrapped = RateLimitedProvider(inner, timeout_seconds=5.0)
+
+    result = await wrapped.generate([{"role": "user", "content": "hi"}])
+
+    assert result == "on time"
+
+
+async def test_none_timeout_disables_budget() -> None:
+    inner = SlowProvider(delay=0.01)
+    wrapped = RateLimitedProvider(inner, timeout_seconds=None)
+
+    result = await wrapped.generate([{"role": "user", "content": "hi"}])
+
+    assert result == "too late"
+
+
+async def test_non_positive_timeout_rejected() -> None:
+    with pytest.raises(ValueError, match="timeout_seconds"):
+        RateLimitedProvider(FlakyProvider(fail_times=0), timeout_seconds=0)
 
 
 async def test_satisfies_llm_provider_protocol() -> None:
