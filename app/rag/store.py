@@ -90,6 +90,14 @@ class PgVectorStore:
                 )
                 """
             )
+            # ANN index so search() uses an Index Scan instead of a full Seq Scan.
+            # HNSW + vector_cosine_ops matches search()'s `<=>` (cosine distance)
+            # operator; pgvector:pg16 ships HNSW support. Verified by the
+            # docker-backed test tests/integration/test_pgvector_index.py.
+            await conn.execute(  # pragma: no cover - requires live pgvector, offline-unreachable
+                "CREATE INDEX IF NOT EXISTS chunks_embedding_hnsw "
+                "ON chunks USING hnsw (embedding vector_cosine_ops)"
+            )
 
     async def add(self, document: str, chunks: list[str], embeddings: list[list[float]]) -> None:
         rows = [
