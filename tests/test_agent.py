@@ -5,9 +5,10 @@ from __future__ import annotations
 import pytest
 
 from app.agent.base import ToolError
-from app.agent.loop import Agent, AgentResult
+from app.agent.loop import Agent, AgentResult, estimate_tokens
 from app.agent.registry import ToolRegistry
 from app.agent.tools import CalculatorTool, RetrievalTool, safe_eval
+from app.observability.tracer import InMemoryTracer
 from app.rag.store import Hit
 
 
@@ -110,6 +111,79 @@ async def test_max_steps_is_respected() -> None:
     assert len(result.steps) == 3
     assert len(provider.calls) == 3
     assert result.answer == "2"  # falls back to the last observation
+
+
+def test_estimate_tokens_is_chars_over_four() -> None:
+    assert estimate_tokens("") == 0
+    assert estimate_tokens("abcd") == 1
+    assert estimate_tokens("a" * 40) == 10
+
+
+async def test_agent_stops_on_token_budget() -> None:
+    # Every reply is an ACTION, so only the budget can stop the loop early.
+    provider = FakeProvider(['ACTION: calculator {"expression": "1+1"}'] * 20)
+    # Tiny budget: the very first prompt (system + question) already overruns it.
+    agent = Agent(provider, _registry_with_calculator(), max_steps=20, max_tokens=1)
+
+    result = await agent.run("what is 1+1?")
+
+    assert result.finished is False
+    assert result.stop_reason == "budget"
+    assert result.steps == []  # stopped before issuing any LLM call
+    assert provider.calls == []  # no generate() call was made
+    assert "budget" in result.answer.lower()
+
+
+async def test_agent_budget_allows_completion_within_limit() -> None:
+    # A generous budget must not interfere with a normal finish.
+    provider = FakeProvider(
+        [
+            'ACTION: calculator {"expression": "2+2"}',
+            "FINAL: four",
+        ]
+    )
+    agent = Agent(provider, _registry_with_calculator(), max_tokens=10_000)
+
+    result = await agent.run("2+2?")
+
+    assert result.finished is True
+    assert result.stop_reason == "final"
+    assert result.answer == "four"
+    assert result.tokens_used > 0
+
+
+async def test_agent_emits_a_span_per_step() -> None:
+    tracer = InMemoryTracer()
+    provider = FakeProvider(
+        [
+            'ACTION: calculator {"expression": "2+2"}',
+            "FINAL: four",
+        ]
+    )
+    agent = Agent(provider, _registry_with_calculator(), tracer=tracer)
+
+    result = await agent.run("2+2?")
+
+    assert result.finished is True
+    step_spans = [s for s in tracer.spans if s.name == "agent.step"]
+    # One span for the ACTION step and one for the FINAL step.
+    assert len(step_spans) == 2
+    assert step_spans[0].attributes["step"] == 0
+    assert step_spans[0].attributes["tool"] == "calculator"
+    assert step_spans[-1].attributes["stop_reason"] == "final"
+    assert all(s.duration_ms is not None for s in step_spans)
+
+
+async def test_budget_span_records_stop_reason() -> None:
+    tracer = InMemoryTracer()
+    provider = FakeProvider(['ACTION: calculator {"expression": "1+1"}'] * 5)
+    agent = Agent(provider, _registry_with_calculator(), max_tokens=1, tracer=tracer)
+
+    result = await agent.run("hi?")
+
+    assert result.stop_reason == "budget"
+    budget_spans = [s for s in tracer.spans if s.attributes.get("stop_reason") == "budget"]
+    assert len(budget_spans) == 1
 
 
 async def test_unknown_tool_becomes_recoverable_observation() -> None:

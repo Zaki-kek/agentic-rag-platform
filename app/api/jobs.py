@@ -16,13 +16,36 @@ class JobRequest(BaseModel):
     """Input for the demo report pipeline."""
 
     data: list[float] = Field(..., min_length=1, description="Numbers to summarize")
+    idempotency_key: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=200,
+        description=(
+            "Optional client-supplied key. Repeating a request with the same "
+            "key returns the already-created job instead of starting a new one."
+        ),
+    )
 
 
 @router.post("/jobs", response_model=JobState)
 async def create_job(payload: JobRequest, request: Request) -> JobState:
     orchestrator = request.app.state.generation_orchestrator
+    checkpoint_store = request.app.state.checkpoint_store
+    idempotency = request.app.state.job_idempotency
+
+    key = payload.idempotency_key
+    if key is not None:
+        existing_id = idempotency.get(key)
+        if existing_id is not None:
+            existing = checkpoint_store.load(existing_id)
+            if existing is not None:
+                return existing
+
     job_id = uuid.uuid4().hex
-    return await orchestrator.run(job_id, {"data": payload.data})
+    state = await orchestrator.run(job_id, {"data": payload.data})
+    if key is not None:
+        idempotency[key] = job_id
+    return state
 
 
 @router.get("/jobs/{job_id}", response_model=JobState)

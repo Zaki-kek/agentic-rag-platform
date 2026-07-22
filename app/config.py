@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = None
     gigachat_credentials: str | None = None
     llm_max_concurrency: int = 8
+    # Per-call wall-clock budget (seconds) for a single LLM generate attempt.
+    llm_timeout_seconds: float = 60.0
 
     # Embeddings: hash | openai
     embedder: str = "hash"
@@ -39,6 +41,14 @@ class Settings(BaseSettings):
 
     # Observability: none | memory | langfuse
     tracer: str = "none"
+
+    # Agent token budget across a single run (rough estimate: len(text)/4 per
+    # LLM call). 0 disables the budget (steps are still capped by max_steps).
+    agent_max_tokens: int = 0
+
+    # Generation checkpoint store: memory | file
+    checkpoint_store: str = "memory"
+    checkpoint_dir: str = ".checkpoints"
 
     # RAG
     chunk_size: int = 800

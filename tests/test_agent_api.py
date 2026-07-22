@@ -13,4 +13,8 @@ def test_agent_endpoint_returns_result(client) -> None:
 
 
 def test_agent_rejects_empty_message(client) -> None:
-    assert client.post("/agent", json={"message": ""}).status_code == 422
+    resp = client.post("/agent", json={"message": ""})
+    assert resp.status_code == 422
+    body = resp.json()
+    assert body["code"] == "validation_error"
+    assert body["error"]

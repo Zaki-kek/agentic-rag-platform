@@ -25,11 +25,31 @@ from app.agent.base import ToolError
 from app.agent.registry import ToolRegistry
 from app.core import get_logger
 from app.llm.base import LLMProvider, Message
+from app.observability.tracer import NoOpTracer, Tracer
 
 logger = get_logger(__name__)
 
 _ACTION_PREFIX = "ACTION:"
 _FINAL_PREFIX = "FINAL:"
+
+# Rough token estimate: ~4 characters per token. Deliberately cheap and
+# provider-agnostic; good enough to enforce a run budget without a tokenizer.
+_CHARS_PER_TOKEN = 4
+
+
+def estimate_tokens(text: str) -> int:
+    """Roughly estimate the token count of ``text`` as ``len(text) // 4``.
+
+    This is a deterministic, dependency-free heuristic used only for budgeting;
+    it is not meant to match any specific provider's tokenizer.
+
+    Args:
+        text: The text to estimate.
+
+    Returns:
+        A non-negative integer token estimate.
+    """
+    return len(text) // _CHARS_PER_TOKEN
 
 _SYSTEM_TEMPLATE = (
     "You are a tool-using assistant. On each turn reply with EXACTLY ONE line.\n"
@@ -51,12 +71,17 @@ class AgentResult(BaseModel):
         answer: The final answer text returned to the caller.
         steps: Per-action trace; each item has ``tool``, ``args`` and ``observation``.
         finished: ``True`` if the model emitted ``FINAL``; ``False`` if the loop
-            stopped because ``max_steps`` was exhausted.
+            stopped early (``max_steps`` exhausted or token budget exceeded).
+        tokens_used: Cumulative rough token estimate spent on LLM calls.
+        stop_reason: Why the loop ended: ``"final"``, ``"max_steps"`` or
+            ``"budget"``.
     """
 
     answer: str
     steps: list[dict[str, Any]] = Field(default_factory=list)
     finished: bool
+    tokens_used: int = 0
+    stop_reason: str = "final"
 
 
 class _ParsedReply(BaseModel):
@@ -117,17 +142,32 @@ def _parse_reply(reply: str) -> _ParsedReply:
 class Agent:
     """A minimal ReAct agent that loops over LLM-selected tool calls."""
 
-    def __init__(self, provider: LLMProvider, registry: ToolRegistry, max_steps: int = 5) -> None:
+    def __init__(
+        self,
+        provider: LLMProvider,
+        registry: ToolRegistry,
+        max_steps: int = 5,
+        *,
+        max_tokens: int = 0,
+        tracer: Tracer | None = None,
+    ) -> None:
         """Initialise the agent.
 
         Args:
             provider: The chat-completion provider that drives reasoning.
             registry: The tools the agent may call.
             max_steps: Maximum number of ACTION iterations before forcing a stop.
+            max_tokens: Rough token budget for the whole run (prompt plus reply,
+                estimated as characters / 4 per LLM call). ``0`` disables the
+                budget; the run is still capped by ``max_steps``.
+            tracer: Optional tracer; one span is opened per agent step. Defaults
+                to a no-op tracer.
         """
         self._provider = provider
         self._registry = registry
         self._max_steps = max(1, max_steps)
+        self._max_tokens = max(0, max_tokens)
+        self._tracer = tracer or NoOpTracer()
 
     def _system_prompt(self) -> str:
         """Render the system prompt embedding the available tool catalogue."""
@@ -148,23 +188,81 @@ class Agent:
             {"role": "user", "content": question},
         ]
         steps: list[dict[str, Any]] = []
+        tokens_used = 0
 
         for step in range(self._max_steps):
-            reply = await self._provider.generate(messages)
-            messages.append({"role": "assistant", "content": reply})
-            parsed = _parse_reply(reply)
+            with self._tracer.span("agent.step", step=step) as handle:
+                # Estimate the prompt cost before the call and stop if a budget
+                # is set and already exhausted - no point issuing another call.
+                prompt_tokens = sum(estimate_tokens(m["content"]) for m in messages)
+                if self._over_budget(tokens_used + prompt_tokens):
+                    handle.set(stop_reason="budget", tokens_used=tokens_used)
+                    logger.warning(
+                        "Agent stopped at step %d: token budget %d exceeded (used ~%d)",
+                        step,
+                        self._max_tokens,
+                        tokens_used + prompt_tokens,
+                    )
+                    return self._budget_stop(steps, tokens_used)
 
-            if not parsed.is_action:
-                logger.info("Agent finished after %d step(s)", step)
-                return AgentResult(answer=parsed.final_text, steps=steps, finished=True)
+                reply = await self._provider.generate(messages)
+                tokens_used += prompt_tokens + estimate_tokens(reply)
+                messages.append({"role": "assistant", "content": reply})
+                parsed = _parse_reply(reply)
+                handle.set(tokens_used=tokens_used, is_action=parsed.is_action)
 
-            observation = await self._run_tool(parsed.tool, parsed.args)
-            steps.append({"tool": parsed.tool, "args": parsed.args, "observation": observation})
-            messages.append({"role": "user", "content": f"OBSERVATION: {observation}"})
+                if not parsed.is_action:
+                    handle.set(stop_reason="final")
+                    logger.info("Agent finished after %d step(s)", step)
+                    return AgentResult(
+                        answer=parsed.final_text,
+                        steps=steps,
+                        finished=True,
+                        tokens_used=tokens_used,
+                        stop_reason="final",
+                    )
+
+                observation = await self._run_tool(parsed.tool, parsed.args)
+                steps.append(
+                    {"tool": parsed.tool, "args": parsed.args, "observation": observation}
+                )
+                messages.append({"role": "user", "content": f"OBSERVATION: {observation}"})
+                handle.set(tool=parsed.tool)
 
         logger.warning("Agent hit max_steps=%d without a FINAL answer", self._max_steps)
         last_observation = steps[-1]["observation"] if steps else ""
-        return AgentResult(answer=str(last_observation), steps=steps, finished=False)
+        return AgentResult(
+            answer=str(last_observation),
+            steps=steps,
+            finished=False,
+            tokens_used=tokens_used,
+            stop_reason="max_steps",
+        )
+
+    def _over_budget(self, tokens: int) -> bool:
+        """Return ``True`` if a positive budget is set and ``tokens`` exceeds it."""
+        return self._max_tokens > 0 and tokens > self._max_tokens
+
+    def _budget_stop(self, steps: list[dict[str, Any]], tokens_used: int) -> AgentResult:
+        """Build the :class:`AgentResult` returned when the token budget is hit.
+
+        Args:
+            steps: The action trace accumulated so far.
+            tokens_used: Rough token estimate spent before stopping.
+
+        Returns:
+            An unfinished :class:`AgentResult` with ``stop_reason="budget"`` and
+            an answer explaining the stop (falling back to the last observation).
+        """
+        last_observation = str(steps[-1]["observation"]) if steps else ""
+        reason = f"Stopped: token budget of {self._max_tokens} exceeded."
+        return AgentResult(
+            answer=last_observation or reason,
+            steps=steps,
+            finished=False,
+            tokens_used=tokens_used,
+            stop_reason="budget",
+        )
 
     async def _run_tool(self, name: str, args: dict[str, Any]) -> str:
         """Look up and execute a tool, returning its observation string.
