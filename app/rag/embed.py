@@ -65,6 +65,42 @@ class OpenAIEmbedder:
         return [item.embedding for item in resp.data]
 
 
+async def embed_in_batches(
+    embedder: Embedder, texts: list[str], batch_size: int = 32
+) -> list[list[float]]:
+    """Embed ``texts`` in fixed-size batches, preserving input order.
+
+    The texts are sliced into consecutive batches of at most ``batch_size``,
+    each embedded with a single ``embedder.embed`` call, and the per-batch
+    results are concatenated. The output is byte-for-byte identical to
+    ``await embedder.embed(texts)``; batching only changes how many provider
+    calls are made (which matters for networked embedders with per-request
+    overhead), not the vectors returned.
+
+    Args:
+        embedder: The embedding provider to call once per batch.
+        texts: The texts to embed, in order. Not mutated.
+        batch_size: Maximum number of texts per ``embed`` call. Must be
+            positive.
+
+    Returns:
+        One embedding vector per input text, in the same order as ``texts``.
+        Returns an empty list for empty input (no provider call is made).
+
+    Raises:
+        ValueError: If ``batch_size`` is not positive.
+    """
+    if batch_size <= 0:
+        raise ValueError(f"batch_size must be positive, got {batch_size}")
+    if not texts:
+        return []
+    embeddings: list[list[float]] = []
+    for start in range(0, len(texts), batch_size):
+        batch = texts[start : start + batch_size]
+        embeddings.extend(await embedder.embed(batch))
+    return embeddings
+
+
 def build_embedder(settings: Settings) -> Embedder:
     """Instantiate the embedder selected in settings.embedder."""
     if settings.embedder == "hash":
