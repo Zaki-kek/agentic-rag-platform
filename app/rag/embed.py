@@ -37,7 +37,7 @@ class HashEmbedder:
         return [self._embed_one(t) for t in texts]
 
     def _embed_one(self, text: str) -> list[float]:
-        vec = np.zeros(self.dim, dtype=np.float32)
+        vec: np.ndarray = np.zeros(self.dim, dtype=np.float32)
         for token in text.lower().split():
             digest = hashlib.md5(token.encode("utf-8")).digest()
             idx = int.from_bytes(digest[:4], "little") % self.dim
