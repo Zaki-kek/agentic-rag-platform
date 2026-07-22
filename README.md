@@ -1,5 +1,9 @@
 # agentic-rag-platform
 
+[![CI](https://github.com/Zaki-kek/agentic-rag-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/Zaki-kek/agentic-rag-platform/actions/workflows/ci.yml)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
 A production-style **RAG assistant**: upload documents, ask questions, get answers
 **grounded with citations**. Built with FastAPI, pgvector and pluggable LLM
 providers, with a clean factory-based architecture and an offline mode so the whole
@@ -16,10 +20,11 @@ stack runs and is testable with **no API keys and no database**.
 - **RAG over your documents** - PDF / DOCX / TXT / MD ingestion (PyMuPDF, python-docx) -> chunking -> embeddings -> vector search -> grounded answer with citations.
 - **Pluggable everything (Factory + Registry)** - LLM provider (`echo`, `openai`, `anthropic`, `gigachat`), embedder (`hash`, `openai`), vector store (`memory`, `pgvector`). Swap via env, no code change.
 - **Offline-first** - deterministic `echo` LLM + `hash` embedder + in-memory store mean `make test` and `make run` work with zero secrets.
+- **Indexed vector search** - the pgvector store creates an HNSW ANN index (`vector_cosine_ops`) on init, so `<=>` cosine search uses an Index Scan rather than a full Seq Scan. This is verified by a docker-backed integration test (`tests/integration/test_pgvector_index.py`, `EXPLAIN ANALYZE` asserts `Index Scan`); it is skipped unless `DB_DSN` points at a live pgvector instance, so the offline suite stays green.
 - **Production shape** - async FastAPI, typed pydantic contracts, layered design, Docker Compose with pgvector, tests, ruff + mypy, CI-ready.
 - **Grounded, not hallucinated** - answers cite the exact chunks they used.
 - **Resumable generation pipeline** - a checkpointed multi-stage orchestrator with quality gates and **deterministic computation** (numbers are computed in Python; the LLM only narrates them, and a gate proves it did not alter them), plus a job-status API and a payment stub.
-- **Tool-using agent** - a dependency-free ReAct loop with a tool registry (safe calculator, RAG retrieval), LangGraph-ready, exposed at `/agent`.
+- **Tool-using agent** - a dependency-free ReAct loop with a tool registry (safe calculator, RAG retrieval), a step cap plus an optional token budget (rough `chars/4` estimate via `AGENT_MAX_TOKENS`), a tracer span per step, LangGraph-ready, exposed at `/agent`.
 - **Evals, tracing, guardrails** - a lightweight RAG eval harness (keyword-recall / grounding / numbers-preserved over a golden set), vendor-neutral tracing (no-op by default, optional Langfuse), and PII redaction + citation validation.
 - **Streaming, Telegram, graph orchestration** - SSE token streaming (`/chat/stream`), a transport-agnostic Telegram delivery adapter (`/telegram/message`, lazy aiogram), a dependency-free LangGraph-style state-graph runner, a rate-limit-aware retrying provider wrapper, and weighted multi-stage job progress.
 
@@ -73,8 +78,42 @@ make run
 | `LLM_MAX_CONCURRENCY` | `8` | provider concurrency cap |
 | `TOP_K` | `4` | retrieval depth |
 | `CHUNK_SIZE` / `CHUNK_OVERLAP` | `800` / `120` | chunking |
+| `CHECKPOINT_STORE` | `memory` | `memory`, `file` (persist job state to `CHECKPOINT_DIR` as JSON) |
+| `AGENT_MAX_TOKENS` | `0` | per-run token budget (rough `chars/4` estimate); `0` = unlimited |
 
 Full list in [.env.example](.env.example).
+
+## Cost controls
+
+Cost is opt-in. The knobs below are the levers for keeping spend and load
+predictable; no dollar figures are quoted here because they depend on your
+provider, model and traffic - these are the mechanisms, not a price list.
+
+- **Offline mode = $0.** The default `LLM_PROVIDER=echo`, `EMBEDDER=hash`,
+  `VECTOR_STORE=memory`, `TRACER=none` makes **no** outbound calls and needs
+  **no** database. CI, smoke tests, demos and `make run` cost nothing. Everything
+  billable is opt-in via env.
+- **`LLM_MAX_CONCURRENCY`** - caps in-flight provider requests. Lower it to bound
+  peak spend rate and stay under provider rate limits; raise it for throughput.
+- **`LLM_TIMEOUT_SECONDS`** - cancels a slow call instead of letting it hang (and
+  keep a connection - and potential retries - alive).
+- **`TOP_K`** - fewer retrieved chunks means a shorter prompt, so fewer input
+  tokens per `/chat` call. Trade recall for cost.
+- **`CHUNK_SIZE` / `CHUNK_OVERLAP`** - larger chunks and less overlap mean fewer
+  embeddings per document (cheaper ingest) and fewer, larger retrieved chunks;
+  smaller chunks improve precision at higher embed and prompt cost.
+- **`AGENT_MAX_TOKENS`** - a per-run token budget for the agent (rough `chars/4`
+  estimate). Set it to hard-stop a runaway ReAct loop before it burns tokens;
+  `0` = unlimited (still capped by `max_steps`).
+- **Embedder choice** - `hash` embeddings are free and offline; switch to
+  `openai` only when you need real semantic search.
+- **Reuse the vector store as a cache** - documents are embedded once at ingest
+  and reused across every query, so retrieval itself costs no embedding tokens
+  (only the query is embedded). Persist with `VECTOR_STORE=pgvector` so a restart
+  does not force a re-ingest.
+
+See [docs/deployment.md](docs/deployment.md) for what is free vs billable per
+deployment shape.
 
 ## API
 
@@ -94,6 +133,23 @@ Full list in [.env.example](.env.example).
 | `GET`  | `/health` | liveness + active config |
 
 Interactive docs at `/docs`.
+
+### Versioning
+
+Every router is dual-mounted: the unversioned paths above stay stable, and the
+same endpoints are also served under a `/v1` prefix (e.g. `/v1/chat`,
+`/v1/health`). New breaking changes get a new prefix without touching `/v1`.
+
+### Error shape
+
+Errors return a uniform JSON body:
+
+```json
+{ "error": "human-readable message", "code": "machine_identifier" }
+```
+
+Codes include `validation_error` (422), `unsupported_media_type` (415),
+`provider_config_error` (500) and `internal_error` (500 fallback).
 
 ## Development
 
