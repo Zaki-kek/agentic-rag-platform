@@ -79,8 +79,8 @@ def separation(good_scores: list[float], bad_scores: list[float]) -> float:
         The separation in ``[0, 1]``. Returns ``0.0`` when either group is
         empty (nothing to compare).
     """
-    good = np.asarray(good_scores, dtype=np.float64).reshape(-1)
-    bad = np.asarray(bad_scores, dtype=np.float64).reshape(-1)
+    good: np.ndarray = np.asarray(good_scores, dtype=np.float64).reshape(-1)
+    bad: np.ndarray = np.asarray(bad_scores, dtype=np.float64).reshape(-1)
     if good.size == 0 or bad.size == 0:
         return 0.0
     diff = good[:, None] - bad[None, :]

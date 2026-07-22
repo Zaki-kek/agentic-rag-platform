@@ -307,8 +307,8 @@ def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
 
     if args.judge:
-        cases = load_judged_set()
-        print(_format_judge_report(cases))
+        judged_cases = load_judged_set()
+        print(_format_judge_report(judged_cases))
         return 0
 
     if args.retrieval:

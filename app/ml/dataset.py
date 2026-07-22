@@ -192,7 +192,7 @@ async def build_dataset(
     texts, labels = build_texts(seed)
     embedder = HashEmbedder(dim=dim)
     embeddings = await embedder.embed(texts)
-    features = np.asarray(embeddings, dtype=np.float64)
+    features: np.ndarray = np.asarray(embeddings, dtype=np.float64)
 
     rng = np.random.default_rng(seed)
     x_train, y_train, x_test, y_test = _train_test_split(features, labels, test_fraction, rng)
